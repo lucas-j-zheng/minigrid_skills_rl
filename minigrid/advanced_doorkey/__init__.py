@@ -1,0 +1,1 @@
+# import custom_minigrid  # Not needed for standard MiniGrid environments
