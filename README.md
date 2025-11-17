@@ -37,9 +37,9 @@ python -c "import gymnasium; import minigrid; import pfrl; print('All imports su
 ### Train a DQN Agent
 
 ```bash
-python -m minigrid.advanced_doorkey.core.skills_dqn_train \
+python -m experiments.minigrid.advanced_doorkey.core.skills_dqn_train \
     --env MiniGrid-DoorKey-5x5-v0 \
-    --steps 50000 \
+    --steps 2000 \
     --save_dir results/dqn_agent \
     --seed 42
 ```
@@ -47,7 +47,7 @@ python -m minigrid.advanced_doorkey.core.skills_dqn_train \
 ### Evaluate the Agent
 
 ```bash
-python -m minigrid.advanced_doorkey.core.skills_dqn_eval \
+python -m experiments.minigrid.advanced_doorkey.core.skills_dqn_eval \
     results/dqn_agent/agent \
     --episodes 100 \
     --render
@@ -57,17 +57,18 @@ python -m minigrid.advanced_doorkey.core.skills_dqn_eval \
 
 ```
 minigrid_skills_rl/
-├── minigrid/
-│   └── advanced_doorkey/
-│       ├── core/
-│       │   ├── skills.py              # SkillEnv wrapper
-│       │   ├── masked_dqn.py          # Masked DQN agent
-│       │   ├── skills_dqn_network.py  # Q-Network architecture
-│       │   ├── skills_dqn_train.py    # Training script
-│       │   └── skills_dqn_eval.py     # Evaluation script
-│       └── DQN_GUIDE.md               # Quick reference guide
-├── results/                            # Training outputs
-├── configs/                            # Configuration files
+├── experiments/
+│   └── minigrid/
+│       └── advanced_doorkey/
+│           ├── core/
+│           │   ├── skills.py              # SkillEnv wrapper
+│           │   ├── masked_dqn.py          # Masked DQN agent
+│           │   ├── skills_dqn_network.py  # Q-Network architecture
+│           │   ├── skills_dqn_train.py    # Training script
+│           │   └── skills_dqn_eval.py     # Evaluation script
+│           └── DQN_GUIDE.md               # Quick reference guide
+├── results/                                # Training outputs
+├── configs/                                # Configuration files
 ├── requirements.txt
 └── README.md
 ```
