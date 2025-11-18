@@ -49,7 +49,7 @@ python -m experiments.advanced_doorkey.core.skills_dqn_train \
 ```bash
 python -m experiments.advanced_doorkey.core.skills_dqn_eval \
     results/dqn_agent/agent \
-    --episodes 100 \
+    --episodes 10 \
     --render
 ```
 

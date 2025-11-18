@@ -171,11 +171,13 @@ class SkillEnv(Wrapper):
     env: Union[Wrapper, MiniGridEnv]  # Type hint: wraps MiniGrid environment
 
     def __init__(self, env: Env, option_reward: float = 1.0, max_skill_horizon: int = 200,
-                 door_colour: Optional[str] = None, max_episode_steps: int = 100):
+                 door_colour: Optional[str] = None, max_episode_steps: int = 100,
+                 step_penalty: float = 0.01):
         super().__init__(env)
         self.option_reward = option_reward
         self.max_skill_horizon = max_skill_horizon
         self.max_episode_steps = max_episode_steps
+        self.step_penalty = step_penalty  # Penalty per skill step to encourage efficiency
         self.door_colour = door_colour
         self.objects = {"key": None, "door": None, "goal": None}
         self.obs = None
@@ -214,7 +216,8 @@ class SkillEnv(Wrapper):
         if not sk.can_start(self):
             # Check for episode step limit even when skill is blocked
             truncated = self._skill_step >= self.max_episode_steps
-            return deepcopy(self.obs), 0.0, False, truncated, {"blocked": True, "skill": sk.name}
+            # Apply step penalty even for blocked skills
+            return deepcopy(self.obs), -self.step_penalty, False, truncated, {"blocked": True, "skill": sk.name}
 
         total_r = 0.0
         self._env_done = False
@@ -229,12 +232,12 @@ class SkillEnv(Wrapper):
                 break
         done = sk.is_done(self)
 
-        # Only give reward if the environment goal is reached (not just skill completion)
-        # This prevents reward hacking by repeatedly doing easy skills
+        # Reward structure:
+        # - Step penalty to encourage efficiency
+        # - Big bonus only when goal is reached
+        r = -self.step_penalty  # Penalty for each skill step
         if self._env_done:
-            r = 1.0  # Actual goal reached
-        else:
-            r = 0.0  # Skill completed but goal not reached
+            r += 1.0  # Big bonus for reaching goal
 
         total_r += r
         # Return 5-tuple: (obs, reward, terminated, truncated, info)
@@ -253,9 +256,12 @@ class SkillEnv(Wrapper):
         result = self.env.step(action)
         if len(result) == 5:
             obs, r, terminated, truncated, info = result
-            done = bool(terminated or truncated)
         else:
             obs, r, done, info = result
+            # Old gym API - assume done means terminated
+            terminated = done
+            truncated = False
+
         if action == actions.FORWARD and self.env.unwrapped.agent_dir == 3:
             tint_color = "red"
         elif action == actions.FORWARD and self.env.unwrapped.agent_dir == 1:
@@ -272,9 +278,12 @@ class SkillEnv(Wrapper):
         self.obs = deepcopy(obs)
         self._timestep += 1
         self._find_objs()
-        if done:
+
+        # Only set _env_done if goal was actually reached (terminated), not truncated
+        if terminated:
             self._env_done = True
-        return obs, r, done, info
+
+        return obs, r, terminated or truncated, info
 
     def _is_free(self, x: int, y: int) -> bool:
         if not (0 <= x < self.env.unwrapped.width and 0 <= y < self.env.unwrapped.height): return False  # type: ignore

@@ -102,6 +102,24 @@ def evaluate_dqn(
     agent.load(agent_path)
     agent.training = False  # Set to evaluation mode
 
+    # Debug: Check Q-values for initial state
+    skill_names = [skill.name for skill in env.skills]
+    print("\n" + "=" * 50)
+    print("DEBUG: Testing agent Q-values")
+    print("=" * 50)
+    test_obs, _ = env.reset(seed=seed)
+    with torch.no_grad():
+        from pfrl.utils.batch_states import batch_states
+        batch_obs = batch_states([test_obs], agent.device, phi)
+        q_out = agent.model(batch_obs)
+        q_values = q_out.q_values[0].cpu().numpy()
+        print(f"Q-values for initial state:")
+        for i, (skill_name, q_val) in enumerate(zip(skill_names, q_values)):
+            print(f"  {skill_name:12s}: {q_val:.4f}")
+        print(f"Best action: {skill_names[q_values.argmax()]}")
+        print(f"Epsilon: {agent.explorer.epsilon if hasattr(agent, 'explorer') else 'N/A'}")
+    print("=" * 50 + "\n")
+
     if save_dir is None:
         save_dir = os.path.dirname(agent_path)
 
@@ -162,6 +180,10 @@ def evaluate_dqn(
             else:
                 if render:
                     print(f"  -> Skill '{skill_name}' did not complete")
+
+            # Debug: Print reward and done flags
+            if render:
+                print(f"     [DEBUG] reward={reward}, terminated={terminated}, truncated={truncated}, total_reward={episode_reward}")
 
             if render:
                 env.render()
