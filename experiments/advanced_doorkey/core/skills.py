@@ -106,7 +106,14 @@ class GetKey(Skill):
 class OpenDoor(Skill):
     name = "open_door"
     def can_start(self, env):
-        return env.objects["door"] is not None and not env.get_door_obj().is_open  # type: ignore
+        if env.objects["door"] is None:
+            return False
+        door = env.get_door_obj()
+        if door is None or door.is_open:
+            return False
+        # Check if agent is holding a key (required to open locked door)
+        carrying = getattr(env.env.unwrapped, "carrying", None)
+        return carrying is not None and getattr(carrying, "type", None) == "key"
     def is_done(self, env):
         return env.objects["door"] is not None and env.get_door_obj().is_open  # type: ignore
     def tick(self, env):
