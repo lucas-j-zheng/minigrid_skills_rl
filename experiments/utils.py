@@ -368,6 +368,20 @@ def environment_builder(
         env = RandomStartWrapper(env, random_starts)
     return env
 
+def load_gin_configs(config_files, bindings=None):
+    """Load gin configuration files and apply bindings.
+
+    Args:
+        config_files: List of paths to gin config files
+        bindings: Optional list of gin binding strings
+    """
+    import gin
+    if bindings is None:
+        bindings = []
+    for config_file in config_files:
+        gin.parse_config_file(config_file)
+    gin.parse_config(bindings)
+
 def process_data(array):
     d = collections.OrderedDict()
     d["mean"] = np.mean(array)

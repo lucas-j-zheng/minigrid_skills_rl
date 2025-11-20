@@ -1,11 +1,11 @@
-from experiments.minigrid.doorkey.core.minigrid_experiment import MinigridExperiment
-from experiments.minigrid.doorkey.core.agents.rainbow import Rainbow
+from experiments.doorkey.core.minigrid_experiment import MinigridExperiment
+from experiments.doorkey.core.agents.rainbow import Rainbow
 import os
-import numpy as np 
-from experiments.minigrid.utils import environment_builder
-import argparse 
+import numpy as np
+from experiments.utils import environment_builder
+import argparse
 
-from portable.utils.utils import load_gin_configs
+from experiments.utils import load_gin_configs
 import torch
 
 
