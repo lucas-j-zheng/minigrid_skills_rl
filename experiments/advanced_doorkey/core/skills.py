@@ -111,9 +111,15 @@ class OpenDoor(Skill):
         door = env.get_door_obj()
         if door is None or door.is_open:
             return False
-        # Check if agent is holding a key (required to open locked door)
-        carrying = getattr(env.env.unwrapped, "carrying", None)
-        return carrying is not None and getattr(carrying, "type", None) == "key"
+        # Two preconditions:
+        # 1. Door is locked AND agent has key
+        # 2. Door is unlocked AND closed (can open without key)
+        is_locked = getattr(door, "is_locked", False)
+        if is_locked:
+            carrying = getattr(env.env.unwrapped, "carrying", None)
+            return carrying is not None and getattr(carrying, "type", None) == "key"
+        else:
+            return True  # Unlocked door can be opened without key
     def is_done(self, env):
         return env.objects["door"] is not None and env.get_door_obj().is_open  # type: ignore
     def tick(self, env):
