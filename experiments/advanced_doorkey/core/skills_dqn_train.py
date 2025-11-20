@@ -106,7 +106,7 @@ def train_dqn(env_name="MiniGrid-DoorKey-5x5-v0", total_steps=20_000, lr=2.5e-4,
                     f"Epsilon: {epsilon:.3f}"
                 )
 
-            obs, info = env.reset()
+            obs, info = env.reset(seed=seed)
             current_episode_reward = 0
             current_episode_length = 0
 
