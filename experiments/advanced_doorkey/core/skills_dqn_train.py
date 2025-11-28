@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 import numpy as np
 import torch
@@ -11,6 +12,10 @@ import pfrl
 from .skills import SkillEnv
 from .skills_dqn_network import SkillQNetwork
 from .masked_dqn import MaskedDoubleDQN, make_masked_dqn_agent
+
+# Import visualization utilities
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
+from experiments.value_visualization import log_value_function_periodically
 
 
 def phi(obs):
@@ -105,6 +110,18 @@ def train_dqn(env_name="MiniGrid-DoorKey-5x5-v0", total_steps=20_000, lr=2.5e-4,
                     f"Avg Length: {avg_length:.1f} | "
                     f"Epsilon: {epsilon:.3f}"
                 )
+
+            # Log value function visualizations every 100 episodes
+            # Pass action mask function for skill-based agent
+            log_value_function_periodically(
+                agent=agent,
+                env_name=env_name,
+                episode_num=len(episode_rewards),
+                log_dir=os.path.join(save_dir, "value_plots"),
+                log_interval=100,
+                get_action_mask_fn=lambda e: e.get_action_mask(),
+                agent_type="skill"
+            )
 
             obs, info = env.reset(seed=seed)
             current_episode_reward = 0
