@@ -2,6 +2,23 @@
 
 Run in `minigrid_rl` conda environment.
 
+## Debug: Check observation sizes
+
+```bash
+python -c "
+import gymnasium as gym
+import minigrid
+for env_name in ['MiniGrid-DoorKey-5x5-v0', 'MiniGrid-DoorKey-8x8-v0', 'MiniGrid-DoorKey-16x16-v0']:
+    env = gym.make(env_name, render_mode='rgb_array')
+    obs, _ = env.reset()
+    print(f'{env_name}: obs[\"image\"].shape = {obs[\"image\"].shape}')
+    env.close()
+"
+```
+
+MiniGrid uses 7x7 partial view by default. If crash is not from obs size,
+it may be from A* pathfinding (expensive on 16x16) or replay buffer memory.
+
 ## 5x5 DoorKey
 
 ```bash
@@ -39,8 +56,12 @@ python -m experiments.advanced_doorkey.core.skills_dqn_train \
     --env MiniGrid-DoorKey-16x16-v0 \
     --steps 100000 \
     --save_dir results/dqn_16x16 \
-    --seed 42
+    --seed 42 \
+    --obs_size 84
 ```
+
+Note: `--obs_size 84` resizes observations to 84x84 to reduce memory/CPU load.
+If agent/key/door disappear in the resized image, use `--obs_size 100` instead.
 
 ## With GPU
 
