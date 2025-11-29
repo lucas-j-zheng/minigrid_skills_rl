@@ -2,24 +2,31 @@
 
 Run in `minigrid_rl` conda environment.
 
-## Debug: Check observation sizes
+## Observation Mode
+
+Training now uses **full top-down RGB view** (not partial 7x7 egocentric view).
+
+| Grid Size | Observation Size |
+|-----------|------------------|
+| 5x5       | 40x40x3          |
+| 8x8       | 64x64x3          |
+| 16x16     | 128x128x3        |
+
+Use `--obs_size 84` to resize large observations for efficiency.
+
+## Debug: Check observations
 
 ```bash
-python -c "
-import gymnasium as gym
-import minigrid
-for env_name in ['MiniGrid-DoorKey-5x5-v0', 'MiniGrid-DoorKey-8x8-v0', 'MiniGrid-DoorKey-16x16-v0']:
-    env = gym.make(env_name, render_mode='rgb_array')
-    obs, _ = env.reset()
-    print(f'{env_name}: obs[\"image\"].shape = {obs[\"image\"].shape}')
-    env.close()
-"
+# Visualize observation for any environment
+python debug_observation.py --env MiniGrid-DoorKey-8x8-v0 --full
+
+# Compare all sizes
+python debug_observation.py --compare
 ```
 
-MiniGrid uses 7x7 partial view by default. If crash is not from obs size,
-it may be from A* pathfinding (expensive on 16x16) or replay buffer memory.
+## Skill-based DQN (5 skills)
 
-## 5x5 DoorKey
+### 5x5 DoorKey
 
 ```bash
 python -m experiments.advanced_doorkey.core.skills_dqn_train \
@@ -29,17 +36,7 @@ python -m experiments.advanced_doorkey.core.skills_dqn_train \
     --seed 42
 ```
 
-## 6x6 DoorKey
-
-```bash
-python -m experiments.advanced_doorkey.core.skills_dqn_train \
-    --env MiniGrid-DoorKey-6x6-v0 \
-    --steps 30000 \
-    --save_dir results/dqn_6x6 \
-    --seed 42
-```
-
-## 8x8 DoorKey
+### 8x8 DoorKey
 
 ```bash
 python -m experiments.advanced_doorkey.core.skills_dqn_train \
@@ -49,7 +46,7 @@ python -m experiments.advanced_doorkey.core.skills_dqn_train \
     --seed 42
 ```
 
-## 16x16 DoorKey
+### 16x16 DoorKey
 
 ```bash
 python -m experiments.advanced_doorkey.core.skills_dqn_train \
@@ -60,12 +57,7 @@ python -m experiments.advanced_doorkey.core.skills_dqn_train \
     --obs_size 84
 ```
 
-Note: `--obs_size 84` resizes observations to 84x84 to reduce memory/CPU load.
-If agent/key/door disappear in the resized image, use `--obs_size 100` instead.
-
-## With GPU
-
-Add `--use_gpu` flag:
+### With GPU
 
 ```bash
 python -m experiments.advanced_doorkey.core.skills_dqn_train \
@@ -76,31 +68,30 @@ python -m experiments.advanced_doorkey.core.skills_dqn_train \
     --use_gpu
 ```
 
+## Primitive DQN (7 actions)
+
+### 8x8 DoorKey
+
+```bash
+python -m experiments.doorkey.test_primitive_dqn \
+    --env MiniGrid-DoorKey-8x8-v0 \
+    --steps 100000 \
+    --save_dir results/primitive_8x8 \
+    --seed 42
+```
+
+### 16x16 DoorKey (with resizing)
+
+```bash
+python -m experiments.doorkey.test_primitive_dqn \
+    --env MiniGrid-DoorKey-16x16-v0 \
+    --steps 200000 \
+    --save_dir results/primitive_16x16 \
+    --seed 42 \
+    --obs_size 84
+```
+
 ## Evaluation
-
-### 5x5
-
-```bash
-python -m experiments.advanced_doorkey.core.skills_dqn_eval \
-    results/dqn_5x5/agent \
-    --env MiniGrid-DoorKey-5x5-v0 \
-    --episodes 100 \
-    --seed 42 \
-    --render
-```
-
-### 6x6
-
-```bash
-python -m experiments.advanced_doorkey.core.skills_dqn_eval \
-    results/dqn_6x6/agent \
-    --env MiniGrid-DoorKey-6x6-v0 \
-    --episodes 100 \
-    --seed 42 \
-    --render
-```
-
-### 8x8
 
 ```bash
 python -m experiments.advanced_doorkey.core.skills_dqn_eval \
@@ -111,18 +102,7 @@ python -m experiments.advanced_doorkey.core.skills_dqn_eval \
     --render
 ```
 
-### 16x16
-
-```bash
-python -m experiments.advanced_doorkey.core.skills_dqn_eval \
-    results/dqn_16x16/agent \
-    --env MiniGrid-DoorKey-16x16-v0 \
-    --episodes 100 \
-    --seed 42 \
-    --render
-```
-
-### Without rendering (faster)
+Without rendering (faster):
 
 ```bash
 python -m experiments.advanced_doorkey.core.skills_dqn_eval \
@@ -132,7 +112,7 @@ python -m experiments.advanced_doorkey.core.skills_dqn_eval \
     --seed 42
 ```
 
-### Analyze skill sequences
+Analyze skill sequences:
 
 ```bash
 python -m experiments.advanced_doorkey.core.skills_dqn_eval \
