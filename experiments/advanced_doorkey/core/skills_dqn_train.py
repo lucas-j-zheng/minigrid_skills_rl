@@ -18,25 +18,60 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
 from experiments.value_visualization import log_value_function_periodically
 
 
+def make_phi(target_size=None):
+    """
+    Create preprocessing function for observations.
+
+    Args:
+        target_size: Optional (H, W) tuple to resize images. Use (84, 84) for large envs.
+    """
+    def phi(obs):
+        """Preprocess obs: resize (optional), normalize, HWC→CHW."""
+        x = obs["image"] if isinstance(obs, dict) else obs
+        x = np.asarray(x, dtype=np.float32)
+
+        # Resize if target_size specified (for large environments like 16x16)
+        if target_size is not None and x.ndim == 3:
+            from PIL import Image
+            # x is HWC, convert to PIL, resize, back to numpy
+            if x.max() > 1.1:
+                img = Image.fromarray(x.astype(np.uint8))
+            else:
+                img = Image.fromarray((x * 255).astype(np.uint8))
+            img = img.resize((target_size[1], target_size[0]), Image.BILINEAR)
+            x = np.asarray(img, dtype=np.float32)
+
+        if x.max() > 1.1:
+            x = x / 255.0
+        if x.ndim == 3 and x.shape[-1] in [1, 3]:
+            x = np.transpose(x, (2, 0, 1))
+        return x
+    return phi
+
+
+# Default phi for backward compatibility
 def phi(obs):
     """Preprocess obs: normalize, HWC→CHW."""
-    x = obs["image"] if isinstance(obs, dict) else obs
-    x = np.asarray(x, dtype=np.float32)
-    if x.max() > 1.1:
-        x = x / 255.0
-    if x.ndim == 3 and x.shape[-1] in [1, 3]:
-        x = np.transpose(x, (2, 0, 1))
-    return x
+    return make_phi(target_size=None)(obs)
 
 
 def train_dqn(env_name="MiniGrid-DoorKey-5x5-v0", total_steps=20_000, lr=2.5e-4, gamma=0.99,
               buffer_size=50_000, batch_size=32, replay_start_size=1000, update_interval=4,
               target_update_interval=1000, start_epsilon=1.0, final_epsilon=0.01,
               final_exploration_steps=10_000, eval_interval=1000, eval_n_episodes=10,
-              save_dir="results/dqn_skills", seed=42, use_gpu=False):
+              save_dir="results/dqn_skills", seed=42, use_gpu=False, obs_size=None):
+    """
+    Args:
+        obs_size: Optional observation size (H, W) to resize to. Use 84 for large envs.
+                  If None, uses original observation size.
+    """
     np.random.seed(seed)
     torch.manual_seed(seed)
     os.makedirs(save_dir, exist_ok=True)
+
+    # Create phi function with optional resizing
+    target_size = (obs_size, obs_size) if obs_size is not None else None
+    phi_fn = make_phi(target_size=target_size)
 
     base_env = gym.make(env_name, render_mode="rgb_array")
     env = SkillEnv(base_env, option_reward=1.0, max_skill_horizon=200)
@@ -44,10 +79,11 @@ def train_dqn(env_name="MiniGrid-DoorKey-5x5-v0", total_steps=20_000, lr=2.5e-4,
     eval_env = SkillEnv(eval_base_env, option_reward=1.0, max_skill_horizon=200)
 
     obs, _ = env.reset(seed=seed)
-    obs_processed = phi(obs)
+    obs_processed = phi_fn(obs)
     input_channels = obs_processed.shape[0]
 
-    print(f"Observation shape: {obs_processed.shape}")
+    print(f"Original observation shape: {obs['image'].shape if isinstance(obs, dict) else obs.shape}")
+    print(f"Processed observation shape: {obs_processed.shape}")
     print(f"Number of skills: {len(env.skills)}")
 
     q_func = SkillQNetwork(num_skills=len(env.skills), input_channels=input_channels)
@@ -61,7 +97,7 @@ def train_dqn(env_name="MiniGrid-DoorKey-5x5-v0", total_steps=20_000, lr=2.5e-4,
         print("Using CPU")
 
     agent = make_masked_dqn_agent(
-        q_func=q_func, num_actions=len(env.skills), phi=phi, lr=lr, gamma=gamma,
+        q_func=q_func, num_actions=len(env.skills), phi=phi_fn, lr=lr, gamma=gamma,
         buffer_size=buffer_size, replay_start_size=replay_start_size,
         update_interval=update_interval, target_update_interval=target_update_interval,
         start_epsilon=start_epsilon, final_epsilon=final_epsilon,
@@ -223,6 +259,8 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--save_dir", type=str, default="results/dqn_skills")
     parser.add_argument("--use_gpu", action="store_true")
+    parser.add_argument("--obs_size", type=int, default=None,
+                        help="Resize observations to this size (e.g., 84). Use for large envs like 16x16.")
     args = parser.parse_args()
 
     train_dqn(
@@ -232,4 +270,5 @@ if __name__ == "__main__":
         seed=args.seed,
         save_dir=args.save_dir,
         use_gpu=args.use_gpu,
+        obs_size=args.obs_size,
     )
