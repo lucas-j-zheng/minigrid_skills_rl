@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 
 import pfrl
 
+from minigrid.wrappers import RGBImgObsWrapper, ImgObsWrapper
+
 from .skills import SkillEnv
 from .skills_dqn_network import SkillQNetwork
 from .masked_dqn import MaskedDoubleDQN, make_masked_dqn_agent
@@ -73,9 +75,15 @@ def train_dqn(env_name="MiniGrid-DoorKey-5x5-v0", total_steps=20_000, lr=2.5e-4,
     target_size = (obs_size, obs_size) if obs_size is not None else None
     phi_fn = make_phi(target_size=target_size)
 
+    # Wrap with RGBImgObsWrapper for full top-down view (not partial 7x7)
     base_env = gym.make(env_name, render_mode="rgb_array")
+    base_env = RGBImgObsWrapper(base_env)
+    base_env = ImgObsWrapper(base_env)
     env = SkillEnv(base_env, option_reward=1.0, max_skill_horizon=200)
+
     eval_base_env = gym.make(env_name, render_mode="rgb_array")
+    eval_base_env = RGBImgObsWrapper(eval_base_env)
+    eval_base_env = ImgObsWrapper(eval_base_env)
     eval_env = SkillEnv(eval_base_env, option_reward=1.0, max_skill_horizon=200)
 
     obs, _ = env.reset(seed=seed)
