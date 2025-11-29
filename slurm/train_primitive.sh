@@ -47,7 +47,7 @@ mkdir -p slurm/logs
 
 # Load modules
 module purge
-module load anaconda/2022.05
+module load anaconda/2023.09-0-7nso27y
 module load cuda/11.8.0
 
 # Activate conda environment
