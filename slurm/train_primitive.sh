@@ -71,7 +71,7 @@ if [[ "$ENV_SIZE" == "16x16" ]]; then
 fi
 
 # Navigate to project directory
-cd $HOME/minigrid_skills_rl
+cd /users/lzheng35/Desktop/brown/irl-lab/minigrid_skills_rl
 
 # Run training
 echo "Starting training..."
