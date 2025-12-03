@@ -179,18 +179,35 @@ class DropKey(Skill):
         raise StopIteration
 
 class SkillEnv(Wrapper):
-    """Skill-based environment wrapper for MiniGrid environments."""
+    """Skill-based environment wrapper for MiniGrid environments.
+
+    Args:
+        env: Base MiniGrid environment to wrap
+        option_reward: Reward given when goal condition is met (default: 1.0)
+        max_skill_horizon: Max primitive steps per skill execution (default: 200)
+        door_colour: Optional door color override
+        max_episode_steps: Max skill-level steps per episode (default: 100)
+        step_penalty: Penalty per skill step to encourage efficiency (default: 0.01)
+        reward_mode: Reward function to use (default: "goal")
+            - "goal": Reward when reaching the goal (original behavior)
+            - "goal_closed_door": Reward only when reaching goal AND door is closed
+    """
 
     env: Union[Wrapper, MiniGridEnv]  # Type hint: wraps MiniGrid environment
 
+    REWARD_MODES = ("goal", "goal_closed_door")
+
     def __init__(self, env: Env, option_reward: float = 1.0, max_skill_horizon: int = 200,
                  door_colour: Optional[str] = None, max_episode_steps: int = 100,
-                 step_penalty: float = 0.01):
+                 step_penalty: float = 0.01, reward_mode: str = "goal"):
         super().__init__(env)
+        if reward_mode not in self.REWARD_MODES:
+            raise ValueError(f"reward_mode must be one of {self.REWARD_MODES}, got '{reward_mode}'")
         self.option_reward = option_reward
         self.max_skill_horizon = max_skill_horizon
         self.max_episode_steps = max_episode_steps
         self.step_penalty = step_penalty  # Penalty per skill step to encourage efficiency
+        self.reward_mode = reward_mode
         self.door_colour = door_colour
         self.objects = {"key": None, "door": None, "goal": None}
         self.obs = None
@@ -247,10 +264,20 @@ class SkillEnv(Wrapper):
 
         # Reward structure:
         # - Step penalty to encourage efficiency
-        # - Big bonus only when goal is reached
+        # - Big bonus based on reward_mode
         r = -self.step_penalty  # Penalty for each skill step
+
         if self._env_done:
-            r += 1.0  # Big bonus for reaching goal
+            # Check reward condition based on mode
+            if self.reward_mode == "goal":
+                # Original: reward just for reaching goal
+                r += self.option_reward
+            elif self.reward_mode == "goal_closed_door":
+                # New: reward only if goal reached AND door is closed
+                door = self.get_door_obj()
+                door_is_closed = door is not None and not door.is_open
+                if door_is_closed:
+                    r += self.option_reward
 
         total_r += r
         # Return 5-tuple: (obs, reward, terminated, truncated, info)

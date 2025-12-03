@@ -61,11 +61,15 @@ def train_dqn(env_name="MiniGrid-DoorKey-5x5-v0", total_steps=20_000, lr=2.5e-4,
               buffer_size=50_000, batch_size=32, replay_start_size=1000, update_interval=4,
               target_update_interval=1000, start_epsilon=1.0, final_epsilon=0.01,
               final_exploration_steps=10_000, eval_interval=1000, eval_n_episodes=10,
-              save_dir="results/dqn_skills", seed=42, use_gpu=False, obs_size=None):
+              save_dir="results/dqn_skills", seed=42, use_gpu=False, obs_size=None,
+              reward_mode="goal"):
     """
     Args:
         obs_size: Optional observation size (H, W) to resize to. Use 84 for large envs.
                   If None, uses original observation size.
+        reward_mode: Reward function to use. Options:
+            - "goal": Reward when reaching the goal (default)
+            - "goal_closed_door": Reward only when reaching goal AND door is closed
     """
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -79,12 +83,14 @@ def train_dqn(env_name="MiniGrid-DoorKey-5x5-v0", total_steps=20_000, lr=2.5e-4,
     base_env = gym.make(env_name, render_mode="rgb_array")
     base_env = RGBImgObsWrapper(base_env)
     base_env = ImgObsWrapper(base_env)
-    env = SkillEnv(base_env, option_reward=1.0, max_skill_horizon=200)
+    env = SkillEnv(base_env, option_reward=1.0, max_skill_horizon=200, reward_mode=reward_mode)
 
     eval_base_env = gym.make(env_name, render_mode="rgb_array")
     eval_base_env = RGBImgObsWrapper(eval_base_env)
     eval_base_env = ImgObsWrapper(eval_base_env)
-    eval_env = SkillEnv(eval_base_env, option_reward=1.0, max_skill_horizon=200)
+    eval_env = SkillEnv(eval_base_env, option_reward=1.0, max_skill_horizon=200, reward_mode=reward_mode)
+
+    print(f"Reward mode: {reward_mode}")
 
     obs, _ = env.reset(seed=seed)
     obs_processed = phi_fn(obs)
@@ -269,6 +275,9 @@ if __name__ == "__main__":
     parser.add_argument("--use_gpu", action="store_true")
     parser.add_argument("--obs_size", type=int, default=None,
                         help="Resize observations to this size (e.g., 84). Use for large envs like 16x16.")
+    parser.add_argument("--reward_mode", type=str, default="goal",
+                        choices=["goal", "goal_closed_door"],
+                        help="Reward mode: 'goal' (default) or 'goal_closed_door' (reward only when goal reached with closed door)")
     args = parser.parse_args()
 
     train_dqn(
@@ -279,4 +288,5 @@ if __name__ == "__main__":
         save_dir=args.save_dir,
         use_gpu=args.use_gpu,
         obs_size=args.obs_size,
+        reward_mode=args.reward_mode,
     )

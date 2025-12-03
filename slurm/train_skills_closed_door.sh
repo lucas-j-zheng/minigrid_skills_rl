@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=minigrid_skills
+#SBATCH --job-name=skills_closed
 #SBATCH --output=slurm/logs/%x_%j.out
 #SBATCH --error=slurm/logs/%x_%j.err
 #SBATCH --time=08:00:00
@@ -12,20 +12,20 @@
 #SBATCH --mail-user=$USER@brown.edu
 
 # ============================================================================
-# MiniGrid Skills DQN Training Script for Oscar (Brown HPC)
+# MiniGrid Skills DQN Training - GOAL_CLOSED_DOOR REWARD MODE
+# Reward: +1 only when reaching goal AND door is closed
 # ============================================================================
 # Usage:
-#   sbatch slurm/train_skills.sh                              # Default 16x16, goal mode
-#   sbatch slurm/train_skills.sh 16x16 200000                 # 16x16 with 200k steps
-#   sbatch slurm/train_skills.sh 5x5 50000 123                # 5x5, 50k steps, seed 123
-#   sbatch slurm/train_skills.sh 16x16 100000 42 goal_closed_door  # closed door reward
+#   sbatch slurm/train_skills_closed_door.sh                    # Default 16x16
+#   sbatch slurm/train_skills_closed_door.sh 16x16 200000       # 16x16 with 200k steps
+#   sbatch slurm/train_skills_closed_door.sh 5x5 50000 123      # 5x5, 50k steps, seed 123
 # ============================================================================
 
 # Parse arguments with defaults
 ENV_SIZE="${1:-16x16}"
 STEPS="${2:-100000}"
 SEED="${3:-42}"
-REWARD_MODE="${4:-goal}"  # "goal" or "goal_closed_door"
+REWARD_MODE="goal_closed_door"  # Reward only when goal reached AND door is closed
 
 # Derived variables
 ENV_NAME="MiniGrid-DoorKey-${ENV_SIZE}-v0"
