@@ -9,6 +9,8 @@ import torch
 from typing import Optional, Callable
 import os
 
+from minigrid.wrappers import RGBImgObsWrapper, ImgObsWrapper
+
 
 def get_state_value(agent, obs, action_mask=None):
     """
@@ -37,13 +39,14 @@ def get_state_value(agent, obs, action_mask=None):
         return float(np.max(q_values)) if not np.all(np.isinf(q_values)) else 0.0
 
 
-def create_state_condition(unwrapped, agent_pos, has_key=False, door_open=False,
+def create_state_condition(env, unwrapped, agent_pos, has_key=False, door_open=False,
                            key_pos=None, door_pos=None, key_obj=None, door_obj=None):
     """
     Set up environment to specific state condition WITHOUT resetting.
 
     Args:
-        unwrapped: Unwrapped MiniGrid environment
+        env: The wrapped environment (with RGBImgObsWrapper) for generating observations
+        unwrapped: Unwrapped MiniGrid environment for state manipulation
         agent_pos: (x, y) position for agent
         has_key: Whether agent should be holding the key
         door_open: Whether the door should be open
@@ -53,7 +56,7 @@ def create_state_condition(unwrapped, agent_pos, has_key=False, door_open=False,
         door_obj: Reference to the door object
 
     Returns:
-        obs: Observation from this state
+        obs: Observation from this state (RGB image matching training format)
         success: Whether state setup was successful
     """
     try:
@@ -80,8 +83,9 @@ def create_state_condition(unwrapped, agent_pos, has_key=False, door_open=False,
             else:
                 door_obj.is_locked = True
 
-        # Generate observation from this state
-        obs = unwrapped.gen_obs()
+        # Generate observation through the wrapped env to get RGB format
+        # This matches the training observation format
+        obs = env.observation(unwrapped.gen_obs())
 
         return obs, True
 
@@ -117,15 +121,17 @@ def visualize_value_function(
     import gymnasium as gym
     import minigrid
 
-    # Create environment
+    # Create environment with RGB wrappers to match training observation format
     base_env = gym.make(env_name, render_mode="rgb_array")
+    base_env = RGBImgObsWrapper(base_env)  # Full top-down RGB view
+    rgb_env = ImgObsWrapper(base_env)  # Extract image from obs dict
 
     if use_skill_env and get_action_mask_fn is not None:
         # Import here to avoid circular imports
         from experiments.advanced_doorkey.core.skills import SkillEnv
-        env = SkillEnv(base_env, option_reward=1.0, max_skill_horizon=200)
+        env = SkillEnv(rgb_env, option_reward=1.0, max_skill_horizon=200)
     else:
-        env = base_env
+        env = rgb_env
 
     # Reset ONCE with seed to get consistent layout
     env.reset(seed=seed)
@@ -176,7 +182,7 @@ def visualize_value_function(
 
                 # Create state with agent at this position (no reset!)
                 obs, success = create_state_condition(
-                    unwrapped, (x, y),
+                    rgb_env, unwrapped, (x, y),
                     has_key=has_key, door_open=door_open,
                     key_pos=key_pos, door_pos=door_pos,
                     key_obj=key_obj, door_obj=door_obj
