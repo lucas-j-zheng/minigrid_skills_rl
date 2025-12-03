@@ -10,6 +10,17 @@ from typing import Optional, Callable
 import os
 
 from minigrid.wrappers import RGBImgObsWrapper, ImgObsWrapper
+from PIL import Image
+
+
+def resize_obs(obs: np.ndarray, target_size: int) -> np.ndarray:
+    """Resize observation to target size to match training format."""
+    if obs.max() > 1.1:
+        img = Image.fromarray(obs.astype(np.uint8))
+    else:
+        img = Image.fromarray((obs * 255).astype(np.uint8))
+    img = img.resize((target_size, target_size), Image.BILINEAR)
+    return np.asarray(img, dtype=np.float32)
 
 
 def get_state_value(agent, obs, action_mask=None):
@@ -101,7 +112,8 @@ def visualize_value_function(
     seed: int = 42,
     get_action_mask_fn: Optional[Callable] = None,
     title_prefix: str = "",
-    use_skill_env: bool = False
+    use_skill_env: bool = False,
+    obs_size: Optional[int] = None
 ):
     """
     Create value function heatmaps for three conditions:
@@ -117,6 +129,7 @@ def visualize_value_function(
         get_action_mask_fn: Optional function to get action masks (for skill agents)
         title_prefix: Prefix for plot title (e.g., "Episode 1000")
         use_skill_env: If True, wrap env in SkillEnv for action mask compatibility
+        obs_size: Optional observation size to resize to (e.g., 84 for 16x16 envs)
     """
     import gymnasium as gym
     import minigrid
@@ -189,6 +202,10 @@ def visualize_value_function(
                 )
 
                 if success and obs is not None:
+                    # Resize observation if needed to match training format
+                    if obs_size is not None:
+                        obs = resize_obs(obs, obs_size)
+
                     # Get action mask if function provided (for skill agents)
                     action_mask = None
                     if get_action_mask_fn is not None:
@@ -273,7 +290,8 @@ def log_value_function_periodically(
     log_dir: str,
     log_interval: int = 100,
     get_action_mask_fn: Optional[Callable] = None,
-    agent_type: str = "primitive"
+    agent_type: str = "primitive",
+    obs_size: Optional[int] = None
 ):
     """
     Log value function visualization every N episodes.
@@ -286,6 +304,7 @@ def log_value_function_periodically(
         log_interval: Log every N episodes
         get_action_mask_fn: Optional function for action masks (skill agents)
         agent_type: "primitive" or "skill" for labeling
+        obs_size: Optional observation size to resize to (e.g., 84 for 16x16 envs)
     """
     if episode_num % log_interval == 0:
         save_path = os.path.join(
@@ -298,5 +317,6 @@ def log_value_function_periodically(
             save_path=save_path,
             get_action_mask_fn=get_action_mask_fn,
             title_prefix=f"Episode {episode_num}",
-            use_skill_env=(agent_type == "skill")
+            use_skill_env=(agent_type == "skill"),
+            obs_size=obs_size
         )
