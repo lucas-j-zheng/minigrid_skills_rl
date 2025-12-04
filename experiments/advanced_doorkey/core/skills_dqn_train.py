@@ -171,7 +171,8 @@ def train_dqn(env_name="MiniGrid-DoorKey-5x5-v0", total_steps=20_000, lr=2.5e-4,
                 log_interval=100,
                 get_action_mask_fn=lambda e: e.get_action_mask(),
                 agent_type="skill",
-                obs_size=obs_size
+                obs_size=obs_size,
+                visited_positions=env.visited_positions.copy()
             )
 
             obs, info = env.reset(seed=seed)

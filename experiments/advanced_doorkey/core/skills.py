@@ -216,6 +216,7 @@ class SkillEnv(Wrapper):
         self.skills: List[Skill] = [GetKey(), OpenDoor(), CloseDoor(), GoToGoal(), DropKey()]
         self.current_color: Optional[str] = None
         self._env_done = False
+        self.visited_positions: set = set()  # Track all (x, y) positions visited
 
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
@@ -225,6 +226,8 @@ class SkillEnv(Wrapper):
         self._timestep = 0
         self._skill_step = 0
         self._env_done = False
+        # Track starting position
+        self.visited_positions.add(self.get_current_position())
         return obs, self._info()
 
     def get_action_mask(self) -> np.ndarray:
@@ -318,6 +321,8 @@ class SkillEnv(Wrapper):
         self.obs = deepcopy(obs)
         self._timestep += 1
         self._find_objs()
+        # Track visited position
+        self.visited_positions.add(self.get_current_position())
 
         # Only set _env_done if goal was actually reached (terminated), not truncated
         if terminated:

@@ -113,7 +113,8 @@ def visualize_value_function(
     get_action_mask_fn: Optional[Callable] = None,
     title_prefix: str = "",
     use_skill_env: bool = False,
-    obs_size: Optional[int] = None
+    obs_size: Optional[int] = None,
+    visited_positions: Optional[set] = None
 ):
     """
     Create value function heatmaps for three conditions:
@@ -130,6 +131,8 @@ def visualize_value_function(
         title_prefix: Prefix for plot title (e.g., "Episode 1000")
         use_skill_env: If True, wrap env in SkillEnv for action mask compatibility
         obs_size: Optional observation size to resize to (e.g., 84 for 16x16 envs)
+        visited_positions: Optional set of (x, y) positions visited during training.
+                          Unvisited positions will be shown in gray.
     """
     import gymnasium as gym
     import minigrid
@@ -180,9 +183,11 @@ def visualize_value_function(
     ]
 
     value_grids = []
+    visited_masks = []  # Track which positions were visited (for gray overlay)
 
     for condition_name, has_key, door_open in conditions:
         value_grid = np.zeros((width, height))
+        visited_mask = np.ones((width, height), dtype=bool)  # True = visited, False = unvisited
 
         # For each position in the grid
         for x in range(width):
@@ -191,6 +196,13 @@ def visualize_value_function(
                 cell = unwrapped.grid.get(x, y)
                 if cell is not None and cell.type == 'wall':
                     value_grid[x, y] = np.nan
+                    visited_mask[x, y] = True  # Walls are not "unvisited"
+                    continue
+
+                # Check if position was visited during training
+                if visited_positions is not None and (x, y) not in visited_positions:
+                    value_grid[x, y] = np.nan  # Will be shown in gray
+                    visited_mask[x, y] = False
                     continue
 
                 # Create state with agent at this position (no reset!)
@@ -202,9 +214,8 @@ def visualize_value_function(
                 )
 
                 if success and obs is not None:
-                    # Resize observation if needed to match training format
-                    if obs_size is not None:
-                        obs = resize_obs(obs, obs_size)
+                    # NOTE: Don't resize here - agent.phi handles resizing
+                    # Passing raw obs ensures same processing as training
 
                     # Get action mask if function provided (for skill agents)
                     action_mask = None
@@ -219,6 +230,8 @@ def visualize_value_function(
                     value_grid[x, y] = value
                 else:
                     value_grid[x, y] = np.nan
+
+        visited_masks.append(visited_mask)
 
         value_grids.append((condition_name, value_grid))
 
@@ -237,21 +250,33 @@ def visualize_value_function(
     else:
         vmin, vmax = 0, 1
 
+    # Create custom colormap with gray for NaN (unvisited positions)
+    cmap = plt.cm.viridis.copy()
+    cmap.set_bad(color='darkgray')  # Unvisited positions shown in dark gray
+
     # Plot each condition
     for idx, (condition_name, value_grid) in enumerate(value_grids):
         ax = axes[idx]
+        visited_mask = visited_masks[idx]
+
+        # Create masked array for proper NaN handling
+        masked_grid = np.ma.masked_invalid(value_grid.T)
 
         # Plot heatmap (transpose for correct orientation)
         im = ax.imshow(
-            value_grid.T,
+            masked_grid,
             origin='lower',
-            cmap='viridis',
+            cmap=cmap,
             vmin=vmin,
             vmax=vmax,
             aspect='equal'
         )
 
-        ax.set_title(f"{condition_name}", fontsize=12, fontweight='bold')
+        # Count visited vs unvisited for subtitle
+        n_visited = np.sum(visited_mask)
+        n_unvisited = np.sum(~visited_mask)
+        subtitle = f"(visited: {n_visited}, unvisited: {n_unvisited})" if visited_positions is not None else ""
+        ax.set_title(f"{condition_name}\n{subtitle}", fontsize=11, fontweight='bold')
         ax.set_xlabel("X Position")
         ax.set_ylabel("Y Position")
 
@@ -261,7 +286,9 @@ def visualize_value_function(
         ax.grid(True, alpha=0.3, color='white', linewidth=0.5)
 
         # Add colorbar
-        plt.colorbar(im, ax=ax, label='State Value')
+        cbar = plt.colorbar(im, ax=ax, label='State Value')
+        if visited_positions is not None:
+            cbar.ax.set_xlabel('Gray = unvisited', fontsize=8)
 
     # Overall title
     if title_prefix:
@@ -291,7 +318,8 @@ def log_value_function_periodically(
     log_interval: int = 100,
     get_action_mask_fn: Optional[Callable] = None,
     agent_type: str = "primitive",
-    obs_size: Optional[int] = None
+    obs_size: Optional[int] = None,
+    visited_positions: Optional[set] = None
 ):
     """
     Log value function visualization every N episodes.
@@ -305,6 +333,7 @@ def log_value_function_periodically(
         get_action_mask_fn: Optional function for action masks (skill agents)
         agent_type: "primitive" or "skill" for labeling
         obs_size: Optional observation size to resize to (e.g., 84 for 16x16 envs)
+        visited_positions: Optional set of (x, y) positions visited during training
     """
     if episode_num % log_interval == 0:
         save_path = os.path.join(
@@ -318,5 +347,6 @@ def log_value_function_periodically(
             get_action_mask_fn=get_action_mask_fn,
             title_prefix=f"Episode {episode_num}",
             use_skill_env=(agent_type == "skill"),
-            obs_size=obs_size
+            obs_size=obs_size,
+            visited_positions=visited_positions
         )
