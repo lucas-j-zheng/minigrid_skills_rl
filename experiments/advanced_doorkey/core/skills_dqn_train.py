@@ -20,6 +20,52 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
 from experiments.value_visualization import log_value_function_periodically
 
 
+def save_env_screenshot(env, env_name: str, seed: int, save_path: str):
+    """
+    Save a screenshot of the environment layout at the start of training.
+
+    Args:
+        env: The SkillEnv wrapper (used to get object positions)
+        env_name: Environment name for title
+        seed: Random seed used
+        save_path: Path to save the image
+    """
+    # Get the RGB observation (already have it from env)
+    unwrapped = env.unwrapped
+
+    # Render the environment
+    img = unwrapped.render()
+
+    # Create figure with environment image and info
+    fig, ax = plt.subplots(1, 1, figsize=(8, 8))
+    ax.imshow(img)
+    ax.set_title(f"{env_name}\nSeed: {seed}", fontsize=14, fontweight='bold')
+    ax.axis('off')
+
+    # Add text info about object positions
+    info_text = []
+    if env.objects["key"] is not None:
+        info_text.append(f"Key: {env.objects['key'].position}")
+    if env.objects["door"] is not None:
+        info_text.append(f"Door: {env.objects['door'].position}")
+    if env.objects["goal"] is not None:
+        info_text.append(f"Goal: {env.objects['goal']}")
+    info_text.append(f"Agent: {env.get_current_position()}")
+    info_text.append(f"Grid: {unwrapped.width}x{unwrapped.height}")
+
+    # Add info box
+    info_str = "\n".join(info_text)
+    ax.text(0.02, 0.98, info_str, transform=ax.transAxes, fontsize=10,
+            verticalalignment='top', fontfamily='monospace',
+            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"Environment layout saved to {save_path}")
+
+
 def make_phi(target_size=None):
     """
     Create preprocessing function for observations.
@@ -99,6 +145,10 @@ def train_dqn(env_name="MiniGrid-DoorKey-5x5-v0", total_steps=20_000, lr=2.5e-4,
     print(f"Original observation shape: {obs['image'].shape if isinstance(obs, dict) else obs.shape}")
     print(f"Processed observation shape: {obs_processed.shape}")
     print(f"Number of skills: {len(env.skills)}")
+
+    # Save initial environment screenshot
+    env_screenshot_path = os.path.join(save_dir, "env_layout.png")
+    save_env_screenshot(env, env_name, seed, env_screenshot_path)
 
     q_func = SkillQNetwork(num_skills=len(env.skills), input_channels=input_channels)
 
