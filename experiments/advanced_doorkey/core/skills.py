@@ -86,6 +86,9 @@ class Skill:
     def can_start(self, env) -> bool: ...
     def is_done(self, env) -> bool: ...
     def tick(self, env) -> None: ...
+    def reset(self) -> None:
+        """Reset internal state before skill execution. Override if skill has state."""
+        pass
 
 class GetKey(Skill):
     name = "get_key"
@@ -178,6 +181,80 @@ class DropKey(Skill):
         env._env_step(actions.DROP)
         raise StopIteration
 
+
+class MoveN(Skill):
+    """Move n steps in a cardinal direction. If blocked by wall, executes but doesn't move."""
+
+    DIRECTIONS = {
+        "up": 3,    # MiniGrid direction for up (decreasing y)
+        "right": 0, # MiniGrid direction for right (increasing x)
+        "down": 1,  # MiniGrid direction for down (increasing y)
+        "left": 2,  # MiniGrid direction for left (decreasing x)
+    }
+
+    def __init__(self, direction: str, n: int):
+        if direction not in self.DIRECTIONS:
+            raise ValueError(f"direction must be one of {list(self.DIRECTIONS.keys())}")
+        self.direction = direction
+        self.n = n
+        self.name = f"move_{direction}_{n}"
+        self._steps_taken = 0
+
+    def reset(self):
+        """Reset step counter before skill execution."""
+        self._steps_taken = 0
+
+    def can_start(self, env) -> bool:
+        # Can always attempt to move (will just not move if blocked)
+        return True
+
+    def is_done(self, env) -> bool:
+        return self._steps_taken >= self.n
+
+    def tick(self, env) -> None:
+        if self.is_done(env):
+            raise StopIteration
+
+        # Face the desired direction
+        desired_dir = self.DIRECTIONS[self.direction]
+        while env.env.unwrapped.agent_dir != desired_dir:
+            if (env.env.unwrapped.agent_dir - desired_dir) % 4 == 1:
+                env._env_step(actions.LEFT)
+            else:
+                env._env_step(actions.RIGHT)
+
+        # Attempt to move forward (will not move if blocked, but still counts as step)
+        env._env_step(actions.FORWARD)
+        self._steps_taken += 1
+
+        if self.is_done(env):
+            raise StopIteration
+
+
+class MoveUp(MoveN):
+    """Move n steps up (decreasing y)."""
+    def __init__(self, n: int):
+        super().__init__("up", n)
+
+
+class MoveRight(MoveN):
+    """Move n steps right (increasing x)."""
+    def __init__(self, n: int):
+        super().__init__("right", n)
+
+
+class MoveDown(MoveN):
+    """Move n steps down (increasing y)."""
+    def __init__(self, n: int):
+        super().__init__("down", n)
+
+
+class MoveLeft(MoveN):
+    """Move n steps left (decreasing x)."""
+    def __init__(self, n: int):
+        super().__init__("left", n)
+
+
 class SkillEnv(Wrapper):
     """Skill-based environment wrapper for MiniGrid environments.
 
@@ -191,11 +268,12 @@ class SkillEnv(Wrapper):
         reward_mode: Reward function to use (default: "goal")
             - "goal": Reward when reaching the goal (original behavior)
             - "goal_closed_door": Reward only when reaching goal AND door is closed
+            - "complex_doorkey": Reward only when goal reached AND door closed AND key dropped in first room
     """
 
     env: Union[Wrapper, MiniGridEnv]  # Type hint: wraps MiniGrid environment
 
-    REWARD_MODES = ("goal", "goal_closed_door")
+    REWARD_MODES = ("goal", "goal_closed_door", "complex_doorkey")
 
     def __init__(self, env: Env, option_reward: float = 1.0, max_skill_horizon: int = 200,
                  door_colour: Optional[str] = None, max_episode_steps: int = 100,
@@ -213,7 +291,14 @@ class SkillEnv(Wrapper):
         self.obs = None
         self._timestep = 0
         self._skill_step = 0  # Track number of skill-level steps
-        self.skills: List[Skill] = [GetKey(), OpenDoor(), CloseDoor(), GoToGoal(), DropKey()]
+        self.skills: List[Skill] = [
+            GetKey(), OpenDoor(), CloseDoor(), GoToGoal(), DropKey(),
+            # N-step movement skills (n=1, 2, 3 for each direction)
+            MoveUp(1), MoveUp(2), MoveUp(3),
+            MoveRight(1), MoveRight(2), MoveRight(3),
+            MoveDown(1), MoveDown(2), MoveDown(3),
+            MoveLeft(1), MoveLeft(2), MoveLeft(3),
+        ]
         self.current_color: Optional[str] = None
         self._env_done = False
         self.visited_positions: set = set()  # Track all (x, y) positions visited
@@ -245,6 +330,9 @@ class SkillEnv(Wrapper):
         self.current_color = color_names[int(action) % len(color_names)]
 
         self._skill_step += 1
+
+        # Reset skill state before execution (for skills with internal state like MoveN)
+        sk.reset()
 
         if not sk.can_start(self):
             # Check for episode step limit even when skill is blocked
