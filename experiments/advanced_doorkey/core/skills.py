@@ -364,10 +364,23 @@ class SkillEnv(Wrapper):
                 # Original: reward just for reaching goal
                 r += self.option_reward
             elif self.reward_mode == "goal_closed_door":
-                # New: reward only if goal reached AND door is closed
+                # Reward only if goal reached AND door is closed
                 door = self.get_door_obj()
                 door_is_closed = door is not None and not door.is_open
                 if door_is_closed:
+                    r += self.option_reward
+            elif self.reward_mode == "complex_doorkey":
+                # Reward only if: goal reached AND door closed AND key dropped in first room
+                door = self.get_door_obj()
+                door_is_closed = door is not None and not door.is_open
+
+                # Key must be on the ground (not being carried) and in the first room
+                key_in_first_room = (
+                    self.objects["key"] is not None and
+                    self._is_in_first_room(self.objects["key"].position)  # type: ignore
+                )
+
+                if door_is_closed and key_in_first_room:
                     r += self.option_reward
 
         total_r += r
@@ -435,6 +448,17 @@ class SkillEnv(Wrapper):
         ax, ay = self.get_current_position()
         gx, gy = self.objects["goal"]  # type: ignore
         return self._astar((ax, ay), (gx, gy)) is not None
+
+    def _is_in_first_room(self, position: Tuple[int, int]) -> bool:
+        """Check if position is in the first room (left of door).
+
+        In DoorKey environments, the door divides the grid into two rooms.
+        The first room (where agent starts) is to the left of the door.
+        """
+        if self.objects["door"] is None:
+            return True  # No door means single room
+        door_x = self.objects["door"].position[0]  # type: ignore
+        return position[0] < door_x
 
     def _face_cell(self, target):
         tx, ty = target
