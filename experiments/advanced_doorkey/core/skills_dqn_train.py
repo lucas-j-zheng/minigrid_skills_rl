@@ -328,8 +328,8 @@ if __name__ == "__main__":
     parser.add_argument("--obs_size", type=int, default=None,
                         help="Resize observations to this size (e.g., 84). Use for large envs like 16x16.")
     parser.add_argument("--reward_mode", type=str, default="goal",
-                        choices=["goal", "goal_closed_door"],
-                        help="Reward mode: 'goal' (default) or 'goal_closed_door' (reward only when goal reached with closed door)")
+                        choices=["goal", "goal_closed_door", "complex_doorkey"],
+                        help="Reward mode: 'goal', 'goal_closed_door', or 'complex_doorkey' (key in first room + door closed + goal)")
     args = parser.parse_args()
 
     train_dqn(
