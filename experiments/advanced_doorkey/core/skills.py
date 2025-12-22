@@ -163,7 +163,27 @@ class GoToGoal(Skill):
         return door.is_open or env._same_room_as_goal()
     def is_done(self, env):
         if env.objects["goal"] is None: return False
-        return tuple(env.get_current_position()) == tuple(env.objects["goal"])  # type: ignore
+        at_goal = tuple(env.get_current_position()) == tuple(env.objects["goal"])  # type: ignore
+        if not at_goal:
+            return False
+        # Check termination based on reward mode
+        reward_mode = getattr(env, 'reward_mode', 'goal')
+        if reward_mode == "complex_doorkey":
+            # Only terminate if: door closed AND key dropped in first room
+            door = env.get_door_obj()
+            door_is_closed = door is not None and not door.is_open
+            key_in_first_room = (
+                env.objects["key"] is not None and
+                env._is_in_first_room(env.objects["key"].position)
+            )
+            return door_is_closed and key_in_first_room
+        elif reward_mode == "goal_closed_door":
+            # Only terminate if door is closed
+            door = env.get_door_obj()
+            return door is not None and not door.is_open
+        else:
+            # Default "goal" mode: terminate if preconditions met (door open or same room)
+            return self.can_start(env)
     def tick(self, env):
         gx, gy = env.objects["goal"]  # type: ignore
         if self.is_done(env): raise StopIteration
@@ -255,6 +275,48 @@ class MoveLeft(MoveN):
         super().__init__("left", n)
 
 
+class NoTerminateOnGoalWrapper(Wrapper):
+    """Wrapper that prevents MiniGrid from terminating when agent reaches goal.
+
+    This allows agents to step ON the goal, realize preconditions aren't met,
+    and step OFF to continue the episode. Used for complex_doorkey mode.
+    """
+
+    def __init__(self, env: Env):
+        super().__init__(env)
+        self._on_goal = False
+
+    def reset(self, **kwargs):
+        self._on_goal = False
+        return self.env.reset(**kwargs)
+
+    def step(self, action):
+        result = self.env.step(action)
+        if len(result) == 5:
+            obs, reward, terminated, truncated, info = result
+        else:
+            obs, reward, done, info = result
+            terminated = done
+            truncated = False
+
+        # Suppress termination - we'll handle it ourselves
+        # Store that we're on goal so SkillEnv can check
+        if terminated:
+            self._on_goal = True
+            # Don't actually terminate - let the episode continue
+            terminated = False
+            reward = 0.0  # Don't give MiniGrid's reward either
+
+        if len(result) == 5:
+            return obs, reward, terminated, truncated, info
+        else:
+            return obs, reward, terminated, info
+
+    def is_on_goal(self) -> bool:
+        """Check if agent is currently on the goal tile."""
+        return self._on_goal
+
+
 class SkillEnv(Wrapper):
     """Skill-based environment wrapper for MiniGrid environments.
 
@@ -278,9 +340,12 @@ class SkillEnv(Wrapper):
     def __init__(self, env: Env, option_reward: float = 1.0, max_skill_horizon: int = 200,
                  door_colour: Optional[str] = None, max_episode_steps: int = 100,
                  step_penalty: float = 0.01, reward_mode: str = "goal"):
-        super().__init__(env)
         if reward_mode not in self.REWARD_MODES:
             raise ValueError(f"reward_mode must be one of {self.REWARD_MODES}, got '{reward_mode}'")
+        # For complex_doorkey mode, wrap env to prevent premature termination on goal
+        if reward_mode == "complex_doorkey":
+            env = NoTerminateOnGoalWrapper(env)
+        super().__init__(env)
         self.option_reward = option_reward
         self.max_skill_horizon = max_skill_horizon
         self.max_episode_steps = max_episode_steps
@@ -425,8 +490,28 @@ class SkillEnv(Wrapper):
         # Track visited position
         self.visited_positions.add(self.get_current_position())
 
-        # Only set _env_done if goal was actually reached (terminated), not truncated
-        if terminated:
+        # Check termination based on reward mode
+        if self.reward_mode == "complex_doorkey":
+            # For complex_doorkey: only terminate when on goal AND preconditions met
+            # The NoTerminateOnGoalWrapper suppresses MiniGrid's termination,
+            # so we check if agent is on goal ourselves
+            agent_on_goal = (
+                self.objects["goal"] is not None and
+                tuple(self.get_current_position()) == tuple(self.objects["goal"])
+            )
+            if agent_on_goal:
+                # Check preconditions: door closed AND key in first room
+                door = self.get_door_obj()
+                door_is_closed = door is not None and not door.is_open
+                key_in_first_room = (
+                    self.objects["key"] is not None and
+                    self._is_in_first_room(self.objects["key"].position)  # type: ignore
+                )
+                if door_is_closed and key_in_first_room:
+                    self._env_done = True
+                # Otherwise, agent is on goal but preconditions not met - keep going
+        elif terminated:
+            # For other modes, terminate when MiniGrid says so
             self._env_done = True
 
         return obs, r, terminated or truncated, info
